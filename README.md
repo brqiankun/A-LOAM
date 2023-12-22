@@ -3,7 +3,7 @@
 
 A-LOAM is an Advanced implementation of LOAM (J. Zhang and S. Singh. LOAM: Lidar Odometry and Mapping in Real-time), which uses Eigen and Ceres Solver to simplify code structure. This code is modified from LOAM and [LOAM_NOTED](https://github.com/cuitaixiang/LOAM_NOTED). This code is clean and simple without complicated mathematical derivation and redundant operations. It is a good learning material for SLAM beginners.
 
-<img src="https://github.com/HKUST-Aerial-Robotics/A-LOAM/blob/devel/picture/kitti.png" width = 55% height = 55%/>
+<img src=./picture/kitti.png width = 55% height = 55%/>
 
 **Modifier:** [Tong Qin](http://www.qintonguav.com), [Shaozu Cao](https://github.com/shaozu)
 
@@ -61,4 +61,13 @@ The build process may take a while depends on your machine. After that, run `./r
 
 ## 6.Acknowledgements
 Thanks for LOAM(J. Zhang and S. Singh. LOAM: Lidar Odometry and Mapping in Real-time) and [LOAM_NOTED](https://github.com/cuitaixiang/LOAM_NOTED).
+
+
+里程计初步发布的为当前帧相对于里程计坐标系的位姿变换，因为里程计不知道世界坐标系和里程计坐标系的关系
+
+Eigen::SelfAdjointEigenSolver 是什么
+
+aloam中低频率的，精度较高的位姿变换也通过tf /aft_mapped发送出来了
+-
+直接使用第804到855行的发送逻辑，同一发送用于octomap建图
 

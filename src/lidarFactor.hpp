@@ -9,15 +9,13 @@
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl_conversions/pcl_conversions.h>
 
-struct LidarEdgeFactor
-{
+struct LidarEdgeFactor {
 	LidarEdgeFactor(Eigen::Vector3d curr_point_, Eigen::Vector3d last_point_a_,
 					Eigen::Vector3d last_point_b_, double s_)
 		: curr_point(curr_point_), last_point_a(last_point_a_), last_point_b(last_point_b_), s(s_) {}
 
 	template <typename T>
-	bool operator()(const T *q, const T *t, T *residual) const
-	{
+	bool operator()(const T *q, const T *t, T *residual) const {
 
 		Eigen::Matrix<T, 3, 1> cp{T(curr_point.x()), T(curr_point.y()), T(curr_point.z())};
 		Eigen::Matrix<T, 3, 1> lpa{T(last_point_a.x()), T(last_point_a.y()), T(last_point_a.z())};
@@ -26,15 +24,16 @@ struct LidarEdgeFactor
 		//Eigen::Quaternion<T> q_last_curr{q[3], T(s) * q[0], T(s) * q[1], T(s) * q[2]};
 		Eigen::Quaternion<T> q_last_curr{q[3], q[0], q[1], q[2]};
 		Eigen::Quaternion<T> q_identity{T(1), T(0), T(0), T(0)};
-		q_last_curr = q_identity.slerp(T(s), q_last_curr);
+		q_last_curr = q_identity.slerp(T(s), q_last_curr);    // 对上一帧与当前帧的位姿变换进行插值
 		Eigen::Matrix<T, 3, 1> t_last_curr{T(s) * t[0], T(s) * t[1], T(s) * t[2]};
 
 		Eigen::Matrix<T, 3, 1> lp;
-		lp = q_last_curr * cp + t_last_curr;
+		lp = q_last_curr * cp + t_last_curr;    // 将当前帧特征点转换到当前帧开始时刻
 
 		Eigen::Matrix<T, 3, 1> nu = (lp - lpa).cross(lp - lpb);
 		Eigen::Matrix<T, 3, 1> de = lpa - lpb;
 
+		// the point to line distance  边缘特征点cp(转换到同一时刻t_k+1)到直线[lpa, lpb]的距离向量，模长为距离值
 		residual[0] = nu.x() / de.norm();
 		residual[1] = nu.y() / de.norm();
 		residual[2] = nu.z() / de.norm();
@@ -43,8 +42,7 @@ struct LidarEdgeFactor
 	}
 
 	static ceres::CostFunction *Create(const Eigen::Vector3d curr_point_, const Eigen::Vector3d last_point_a_,
-									   const Eigen::Vector3d last_point_b_, const double s_)
-	{
+									   const Eigen::Vector3d last_point_b_, const double s_) {
 		return (new ceres::AutoDiffCostFunction<
 				LidarEdgeFactor, 3, 4, 3>(
 			new LidarEdgeFactor(curr_point_, last_point_a_, last_point_b_, s_)));
@@ -54,23 +52,20 @@ struct LidarEdgeFactor
 	double s;
 };
 
-struct LidarPlaneFactor
-{
+struct LidarPlaneFactor {
 	LidarPlaneFactor(Eigen::Vector3d curr_point_, Eigen::Vector3d last_point_j_,
 					 Eigen::Vector3d last_point_l_, Eigen::Vector3d last_point_m_, double s_)
 		: curr_point(curr_point_), last_point_j(last_point_j_), last_point_l(last_point_l_),
-		  last_point_m(last_point_m_), s(s_)
-	{
-		ljm_norm = (last_point_j - last_point_l).cross(last_point_j - last_point_m);
+		  last_point_m(last_point_m_), s(s_) {
+		ljm_norm = (last_point_j - last_point_l).cross(last_point_j - last_point_m);   // l, j, m三点构成的平面的法向量
 		ljm_norm.normalize();
 	}
 
 	template <typename T>
-	bool operator()(const T *q, const T *t, T *residual) const
-	{
+	bool operator()(const T *q, const T *t, T *residual) const {
 
-		Eigen::Matrix<T, 3, 1> cp{T(curr_point.x()), T(curr_point.y()), T(curr_point.z())};
-		Eigen::Matrix<T, 3, 1> lpj{T(last_point_j.x()), T(last_point_j.y()), T(last_point_j.z())};
+		Eigen::Matrix<T, 3, 1> cp{T(curr_point.x()), T(curr_point.y()), T(curr_point.z())};           // current point
+		Eigen::Matrix<T, 3, 1> lpj{T(last_point_j.x()), T(last_point_j.y()), T(last_point_j.z())};    // last point j
 		//Eigen::Matrix<T, 3, 1> lpl{T(last_point_l.x()), T(last_point_l.y()), T(last_point_l.z())};
 		//Eigen::Matrix<T, 3, 1> lpm{T(last_point_m.x()), T(last_point_m.y()), T(last_point_m.z())};
 		Eigen::Matrix<T, 3, 1> ljm{T(ljm_norm.x()), T(ljm_norm.y()), T(ljm_norm.z())};
@@ -78,21 +73,20 @@ struct LidarPlaneFactor
 		//Eigen::Quaternion<T> q_last_curr{q[3], T(s) * q[0], T(s) * q[1], T(s) * q[2]};
 		Eigen::Quaternion<T> q_last_curr{q[3], q[0], q[1], q[2]};
 		Eigen::Quaternion<T> q_identity{T(1), T(0), T(0), T(0)};
-		q_last_curr = q_identity.slerp(T(s), q_last_curr);
+		q_last_curr = q_identity.slerp(T(s), q_last_curr);    // 进行插值
 		Eigen::Matrix<T, 3, 1> t_last_curr{T(s) * t[0], T(s) * t[1], T(s) * t[2]};
 
 		Eigen::Matrix<T, 3, 1> lp;
 		lp = q_last_curr * cp + t_last_curr;
 
-		residual[0] = (lp - lpj).dot(ljm);
+		residual[0] = (lp - lpj).dot(ljm);    // point to plane distance
 
 		return true;
 	}
 
 	static ceres::CostFunction *Create(const Eigen::Vector3d curr_point_, const Eigen::Vector3d last_point_j_,
 									   const Eigen::Vector3d last_point_l_, const Eigen::Vector3d last_point_m_,
-									   const double s_)
-	{
+									   const double s_) {
 		return (new ceres::AutoDiffCostFunction<
 				LidarPlaneFactor, 1, 4, 3>(
 			new LidarPlaneFactor(curr_point_, last_point_j_, last_point_l_, last_point_m_, s_)));
@@ -103,16 +97,14 @@ struct LidarPlaneFactor
 	double s;
 };
 
-struct LidarPlaneNormFactor
-{
+struct LidarPlaneNormFactor {
 
 	LidarPlaneNormFactor(Eigen::Vector3d curr_point_, Eigen::Vector3d plane_unit_norm_,
 						 double negative_OA_dot_norm_) : curr_point(curr_point_), plane_unit_norm(plane_unit_norm_),
 														 negative_OA_dot_norm(negative_OA_dot_norm_) {}
 
 	template <typename T>
-	bool operator()(const T *q, const T *t, T *residual) const
-	{
+	bool operator()(const T *q, const T *t, T *residual) const {
 		Eigen::Quaternion<T> q_w_curr{q[3], q[0], q[1], q[2]};
 		Eigen::Matrix<T, 3, 1> t_w_curr{t[0], t[1], t[2]};
 		Eigen::Matrix<T, 3, 1> cp{T(curr_point.x()), T(curr_point.y()), T(curr_point.z())};
@@ -125,8 +117,7 @@ struct LidarPlaneNormFactor
 	}
 
 	static ceres::CostFunction *Create(const Eigen::Vector3d curr_point_, const Eigen::Vector3d plane_unit_norm_,
-									   const double negative_OA_dot_norm_)
-	{
+									   const double negative_OA_dot_norm_) {
 		return (new ceres::AutoDiffCostFunction<
 				LidarPlaneNormFactor, 1, 4, 3>(
 			new LidarPlaneNormFactor(curr_point_, plane_unit_norm_, negative_OA_dot_norm_)));
@@ -138,15 +129,13 @@ struct LidarPlaneNormFactor
 };
 
 
-struct LidarDistanceFactor
-{
+struct LidarDistanceFactor {
 
 	LidarDistanceFactor(Eigen::Vector3d curr_point_, Eigen::Vector3d closed_point_) 
 						: curr_point(curr_point_), closed_point(closed_point_){}
 
 	template <typename T>
-	bool operator()(const T *q, const T *t, T *residual) const
-	{
+	bool operator()(const T *q, const T *t, T *residual) const {
 		Eigen::Quaternion<T> q_w_curr{q[3], q[0], q[1], q[2]};
 		Eigen::Matrix<T, 3, 1> t_w_curr{t[0], t[1], t[2]};
 		Eigen::Matrix<T, 3, 1> cp{T(curr_point.x()), T(curr_point.y()), T(curr_point.z())};
@@ -160,8 +149,7 @@ struct LidarDistanceFactor
 		return true;
 	}
 
-	static ceres::CostFunction *Create(const Eigen::Vector3d curr_point_, const Eigen::Vector3d closed_point_)
-	{
+	static ceres::CostFunction *Create(const Eigen::Vector3d curr_point_, const Eigen::Vector3d closed_point_) {
 		return (new ceres::AutoDiffCostFunction<
 				LidarDistanceFactor, 3, 4, 3>(
 			new LidarDistanceFactor(curr_point_, closed_point_)));
