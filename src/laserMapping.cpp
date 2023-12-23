@@ -231,8 +231,8 @@ void process() {
 		while (!cornerLastBuf.empty() && !surfLastBuf.empty() &&
 			     !fullResBuf.empty() && !odometryBuf.empty()) {      // 确保从laserOdometry接收的信息不为空
 			mBuf.lock();
-			// 确保消息时间戳对齐  因为cornerLastBuf在下方被舍弃
-			while (!odometryBuf.empty() && odometryBuf.front()->header.stamp.toSec() < cornerLastBuf.front()->header.stamp.toSec()) {
+			// 确保消息时间戳对齐  因为surfLastBuf在下方被舍弃
+			while (!odometryBuf.empty() && odometryBuf.front()->header.stamp.toSec() < surfLastBuf.front()->header.stamp.toSec()) {
 				odometryBuf.pop();
 			}
 			if (odometryBuf.empty()) {
@@ -240,15 +240,15 @@ void process() {
 				break;
 			}
 
-			while (!surfLastBuf.empty() && surfLastBuf.front()->header.stamp.toSec() < cornerLastBuf.front()->header.stamp.toSec()) {
-				surfLastBuf.pop();
+			while (!cornerLastBuf.empty() && cornerLastBuf.front()->header.stamp.toSec() < surfLastBuf.front()->header.stamp.toSec()) {
+				cornerLastBuf.pop();
 			}
-			if (surfLastBuf.empty()) {
+			if (cornerLastBuf.empty()) {
 				mBuf.unlock();
 				break;
 			}
 
-			while (!fullResBuf.empty() && fullResBuf.front()->header.stamp.toSec() < cornerLastBuf.front()->header.stamp.toSec()) {
+			while (!fullResBuf.empty() && fullResBuf.front()->header.stamp.toSec() < surfLastBuf.front()->header.stamp.toSec()) {
 				fullResBuf.pop();
 			}
 			if (fullResBuf.empty()) {
@@ -261,11 +261,19 @@ void process() {
 			timeLaserCloudFullRes = fullResBuf.front()->header.stamp.toSec();
 			timeLaserOdometry = odometryBuf.front()->header.stamp.toSec();
 
-			if (timeLaserCloudCornerLast != timeLaserOdometry ||
-				  timeLaserCloudSurfLast != timeLaserOdometry ||
-				  timeLaserCloudFullRes != timeLaserOdometry) {    // 确保接收的边缘/平面特征点，点云，里程计位姿信息时间戳匹配
-				std::printf("time corner %f surf %f full %f odom %f \n", timeLaserCloudCornerLast, timeLaserCloudSurfLast, timeLaserCloudFullRes, timeLaserOdometry);
+			if (timeLaserCloudCornerLast != timeLaserCloudSurfLast ||
+				  timeLaserOdometry != timeLaserCloudSurfLast ||
+				  timeLaserCloudFullRes != timeLaserCloudSurfLast) {    // 确保接收的边缘/平面特征点，点云，里程计位姿信息时间戳匹配
 				std::printf("unsync messeage!");
+				std::printf("time corner %f, surf %f, full %f, odom %f. \n\n", timeLaserCloudCornerLast, timeLaserCloudSurfLast, 
+				                                                           timeLaserCloudFullRes, timeLaserOdometry);
+				// 可能surfLastBuf.front()的时间戳比其他都小，则可能死循环
+				while (surfLastBuf.empty() == false && 
+				       (timeLaserCloudCornerLast > surfLastBuf.front()->header.stamp.toSec() ||
+				        timeLaserOdometry > surfLastBuf.front()->header.stamp.toSec() ||
+								timeLaserCloudFullRes > surfLastBuf.front()->header.stamp.toSec())) {
+					surfLastBuf.pop();
+				}
 				mBuf.unlock();
 				break;
 			}
@@ -292,8 +300,8 @@ void process() {
 			t_wodom_curr.z() = odometryBuf.front()->pose.pose.position.z;
 			odometryBuf.pop();
 
-			while (!cornerLastBuf.empty()) {    // 舍弃掉边缘特征点buffer中的帧数
-				cornerLastBuf.pop();
+			while (!surfLastBuf.empty()) {    // 舍弃掉平面特征点buffer中的帧数
+				surfLastBuf.pop();
 				std::printf("drop lidar frame in mapping for real time performance \n");
 			}
 
