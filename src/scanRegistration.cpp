@@ -48,10 +48,13 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <ros/ros.h>
+#include <std_msgs/Header.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <tf/transform_datatypes.h>
 #include <tf/transform_broadcaster.h>
+
+#include <dbg.h>
 
 using std::atan2;
 using std::cos;
@@ -77,6 +80,7 @@ ros::Publisher pubSurfPointsFlat;
 ros::Publisher pubSurfPointsLessFlat;
 ros::Publisher pubRemovePoints;
 std::vector<ros::Publisher> pubEachScan;
+std_msgs::Header cloudHeader;
 
 bool PUB_EACH_LINE = false;
 
@@ -113,6 +117,7 @@ void removeClosedPointCloud(const pcl::PointCloud<PointT> &cloud_in,
 }
 
 void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg) {
+    ROS_INFO("receive a laserCloudMsg");
     if (!systemInited) {   // 延迟初始化
         systemInitCount++;
         if (systemInitCount >= systemDelay) {
@@ -131,7 +136,8 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg) {
 
     pcl::removeNaNFromPointCloud(laserCloudIn, laserCloudIn, indices);   // 去除nan点
     removeClosedPointCloud(laserCloudIn, laserCloudIn, MINIMUM_RANGE);   // 去除到原点距离小于MINIMUM_RANGE的点
-
+    cloudHeader = laserCloudMsg->header;
+    cloudHeader.stamp = ros::Time::now();
 
     int cloudSize = laserCloudIn.points.size();
     float startOri = -atan2(laserCloudIn.points[0].y, laserCloudIn.points[0].x);    // 得到起始和终止点的水平角度
@@ -216,9 +222,11 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg) {
         laserCloudScans[scanID].push_back(point);    // 将点云按照线束划分
     }
     
+    // 去除了固定线数外的点
     cloudSize = count;
     // std::printf("points size %d \n", cloudSize);
 
+    // 重新按照线束组织lidar点
     pcl::PointCloud<PointType>::Ptr laserCloud(new pcl::PointCloud<PointType>());
     for (int i = 0; i < N_SCANS; i++) { 
         scanStartInd[i] = laserCloud->size() + 5;   // 第i束点云在laserCloud中的起始下标
@@ -379,32 +387,32 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg) {
     // 特征提取模块发布的点云时间戳和输入原始点云时间戳相同(而不是程序运行所处时刻)
     sensor_msgs::PointCloud2 laserCloudOutMsg;
     pcl::toROSMsg(*laserCloud, laserCloudOutMsg);
-    laserCloudOutMsg.header.stamp = laserCloudMsg->header.stamp;
-    laserCloudOutMsg.header.frame_id = "camera_init";
+    laserCloudOutMsg.header.stamp = cloudHeader.stamp;
+    laserCloudOutMsg.header.frame_id = "lidar";
     pubLaserCloud.publish(laserCloudOutMsg);          // 发布原始点云
 
     sensor_msgs::PointCloud2 cornerPointsSharpMsg;
     pcl::toROSMsg(cornerPointsSharp, cornerPointsSharpMsg);
-    cornerPointsSharpMsg.header.stamp = laserCloudMsg->header.stamp;
-    cornerPointsSharpMsg.header.frame_id = "camera_init";
+    cornerPointsSharpMsg.header.stamp = cloudHeader.stamp;
+    cornerPointsSharpMsg.header.frame_id = "lidar";
     pubCornerPointsSharp.publish(cornerPointsSharpMsg);  // 发布边缘特征点
 
     sensor_msgs::PointCloud2 cornerPointsLessSharpMsg;
     pcl::toROSMsg(cornerPointsLessSharp, cornerPointsLessSharpMsg);
-    cornerPointsLessSharpMsg.header.stamp = laserCloudMsg->header.stamp;
-    cornerPointsLessSharpMsg.header.frame_id = "camera_init";
+    cornerPointsLessSharpMsg.header.stamp = cloudHeader.stamp;
+    cornerPointsLessSharpMsg.header.frame_id = "lidar";
     pubCornerPointsLessSharp.publish(cornerPointsLessSharpMsg);   // 发布边缘lesssharp特征点
 
     sensor_msgs::PointCloud2 surfPointsFlat2;
     pcl::toROSMsg(surfPointsFlat, surfPointsFlat2);
-    surfPointsFlat2.header.stamp = laserCloudMsg->header.stamp;
-    surfPointsFlat2.header.frame_id = "camera_init";
+    surfPointsFlat2.header.stamp = cloudHeader.stamp;
+    surfPointsFlat2.header.frame_id = "lidar";
     pubSurfPointsFlat.publish(surfPointsFlat2);     // 发布平面特征点
 
     sensor_msgs::PointCloud2 surfPointsLessFlat2;
     pcl::toROSMsg(surfPointsLessFlat, surfPointsLessFlat2);
-    surfPointsLessFlat2.header.stamp = laserCloudMsg->header.stamp;
-    surfPointsLessFlat2.header.frame_id = "camera_init";
+    surfPointsLessFlat2.header.stamp = cloudHeader.stamp;
+    surfPointsLessFlat2.header.frame_id = "lidar";
     pubSurfPointsLessFlat.publish(surfPointsLessFlat2);    // 发布平面less flat特征点
 
     // pub each scam
@@ -414,13 +422,13 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg) {
         {
             sensor_msgs::PointCloud2 scanMsg;
             pcl::toROSMsg(laserCloudScans[i], scanMsg);
-            scanMsg.header.stamp = laserCloudMsg->header.stamp;
-            scanMsg.header.frame_id = "camera_init";
+            scanMsg.header.stamp = cloudHeader.stamp;
+            scanMsg.header.frame_id = "lidar";
             pubEachScan[i].publish(scanMsg);
         }
     }
 
-    printf("scan registration time %f ms *************\n", t_whole.toc());
+    std::printf("scan registration time %f ms *************\n", t_whole.toc());
     if(t_whole.toc() > 100)
         ROS_WARN("scan registration process over 100ms");
 }
@@ -433,7 +441,7 @@ int main(int argc, char **argv) {
     nh.param<int>("scan_line", N_SCANS, 16);    // 参数写入N_SCANS 默认为16
 
     nh.param<double>("minimum_range", MINIMUM_RANGE, 0.1);
-    nh.param<std::string>("cloud_topic", cloud_topic, "/pointcloud");
+    nh.param<std::string>("/ascanRegistration/aloam_input_cloud_topic", cloud_topic, "/kitti/velo/pointcloud");
 
     std::printf("scan line number %d \n", N_SCANS);
 
@@ -443,6 +451,7 @@ int main(int argc, char **argv) {
     }
 
     // 订阅点云信息，并处理点云
+    dbg(cloud_topic);
     ros::Subscriber subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(cloud_topic, 100, laserCloudHandler);
 
     pubLaserCloud = nh.advertise<sensor_msgs::PointCloud2>("/velodyne_cloud_2", 100);    // 发布重新按线束叠加后的原始点云

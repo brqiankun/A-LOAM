@@ -72,3 +72,34 @@ aloam中低频率的，精度较高的位姿变换也通过tf /aft_mapped发送�
 直接使用第804到855行的发送逻辑，同一发送用于octomap建图
 
 为何octomap建图建到1半卡住了？？？？
+
+
+里程计初步发布的为当前帧相对于里程计坐标系的位姿变换，因为里程计不知道世界坐标系和里程计坐标系的关系
+
+Eigen::SelfAdjointEigenSolver 是什么
+
+aloam中低频率的，精度较高的位姿变换也通过tf /aft_mapped发送出来了
+-
+直接使用第804到855行的发送逻辑，同一发送用于octomap建图
+
+为何octomap建图建到1半卡住了？？？？
+
+patchworkpp 在重新播放rosbag时会自动停止卡死
+la3dm也会发生同样的问题。
+应该是ros的问题
+将代码整合到一起来启动调试
+
+### TODO
+gpoctomap_server.cpp 在51行卡死
+调低建图延迟时间
+16线雷达建图有点太稀疏
+
+为何分开启动aloam可以，而整合启动不可以
+
+the ROS client libraries can listen to the /clock topic that is used to publish "simulation time".  
+Time API for accessing time and sleeping instead of using the language-native routines. 
+Normally, the ROS client libraries will use your computer's system clock as a time source, also known as the "wall-clock" or "wall-time" (like the clock on the wall of your lab).
+When you are running a simulation or playing back logged datd a, it is often desirable to instead have the system use a simulated clock.
+
+if the `/use_sim_time` parameter is set, the ROS Time API will return time=0, until it has received a value from the `/clock` topic. The time will only updated on receipt of a message from the `/clock` topic, and will stay constant between updates.
+A Clock Server is any node that publishes to the /clock topic, and there should never be more than one running in a single ROS network. In most cases, the Clock Server is either a simulator or a log playback tool.

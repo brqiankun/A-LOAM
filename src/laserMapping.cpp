@@ -138,7 +138,7 @@ std::vector<float> pointSearchSqDis;
 
 PointType pointOri, pointSel;
 
-ros::Publisher pubLaserCloudSurround, pubLaserCloudMap, pubLaserCloudFullRes, pubOdomAftMapped, pubOdomAftMappedHighFrec, pubLaserAfterMappedPath;
+ros::Publisher pubLaserCloudSurround, pubLaserCloudMap, pubLaserCloudRegisteredCurr, pubOdomAftMappedLowFrec, pubOdomAftMappedHighFrec, pubLaserAfterMappedPath;
 
 nav_msgs::Path laserAfterMappedPath;
 
@@ -213,8 +213,8 @@ void laserOdometryHandler(const nav_msgs::Odometry::ConstPtr &laserOdometry) {
 	Eigen::Vector3d t_w_curr = q_wmap_wodom * t_wodom_curr + t_wmap_wodom; 
 
 	nav_msgs::Odometry odomAftMapped;
-	odomAftMapped.header.frame_id = "camera_init";
-	odomAftMapped.child_frame_id = "/aft_mapped";
+	odomAftMapped.header.frame_id = "lidar_init";
+	odomAftMapped.child_frame_id = "aft_mapped";
 	odomAftMapped.header.stamp = laserOdometry->header.stamp;
 	odomAftMapped.pose.pose.orientation.x = q_w_curr.x();
 	odomAftMapped.pose.pose.orientation.y = q_w_curr.y();
@@ -791,7 +791,7 @@ void process() {
 				sensor_msgs::PointCloud2 laserCloudSurround3;
 				pcl::toROSMsg(*laserCloudSurround, laserCloudSurround3);
 				laserCloudSurround3.header.stamp = ros::Time().fromSec(timeLaserOdometry);
-				laserCloudSurround3.header.frame_id = "camera_init";
+				laserCloudSurround3.header.frame_id = "lidar_init";
 				pubLaserCloudSurround.publish(laserCloudSurround3);
 			}
 
@@ -805,7 +805,7 @@ void process() {
 				sensor_msgs::PointCloud2 laserCloudMsg;
 				pcl::toROSMsg(laserCloudMap, laserCloudMsg);
 				laserCloudMsg.header.stamp = ros::Time().fromSec(timeLaserOdometry);
-				laserCloudMsg.header.frame_id = "camera_init";
+				laserCloudMsg.header.frame_id = "lidar_init";
 				pubLaserCloudMap.publish(laserCloudMsg);
 			}
 
@@ -819,16 +819,16 @@ void process() {
 			sensor_msgs::PointCloud2 laserCloudFullRes3;
 			pcl::toROSMsg(*laserCloudFullRes, laserCloudFullRes3);
 			laserCloudFullRes3.header.stamp = ros::Time().fromSec(timeLaserOdometry);
-			laserCloudFullRes3.header.frame_id = "camera_init";
-			pubLaserCloudFullRes.publish(laserCloudFullRes3);      // 发送当前帧点云(转换到全局坐标系)，和下方的位姿变换，tf发送进行整合，用于octomap建图
+			laserCloudFullRes3.header.frame_id = "lidar_init";
+			pubLaserCloudRegisteredCurr.publish(laserCloudFullRes3);      // 发送当前帧点云(转换到全局坐标系)，和下方的位姿变换，tf发送进行整合，用于octomap建图
 
 			std::printf("mapping pub time %f ms \n", t_pub.toc());
 
 			std::printf("whole mapping time %f ms +++++\n", t_whole.toc());
 
 			nav_msgs::Odometry odomAftMapped;
-			odomAftMapped.header.frame_id = "camera_init";
-			odomAftMapped.child_frame_id = "/aft_mapped";
+			odomAftMapped.header.frame_id = "lidar_init";
+			odomAftMapped.child_frame_id = "aft_mapped";
 			odomAftMapped.header.stamp = ros::Time().fromSec(timeLaserOdometry);
 			odomAftMapped.pose.pose.orientation.x = q_w_curr.x();
 			odomAftMapped.pose.pose.orientation.y = q_w_curr.y();
@@ -837,13 +837,13 @@ void process() {
 			odomAftMapped.pose.pose.position.x = t_w_curr.x();
 			odomAftMapped.pose.pose.position.y = t_w_curr.y();
 			odomAftMapped.pose.pose.position.z = t_w_curr.z();
-			pubOdomAftMapped.publish(odomAftMapped);    // 最终发布的是t_w_curr和q_w_curr 当前帧相对与地图的位姿变换
+			pubOdomAftMappedLowFrec.publish(odomAftMapped);    // 最终发布的是t_w_curr和q_w_curr 当前帧相对与地图的位姿变换 低频发布
 
 			geometry_msgs::PoseStamped laserAfterMappedPose;
 			laserAfterMappedPose.header = odomAftMapped.header;
 			laserAfterMappedPose.pose = odomAftMapped.pose.pose;
 			laserAfterMappedPath.header.stamp = odomAftMapped.header.stamp;
-			laserAfterMappedPath.header.frame_id = "camera_init";
+			laserAfterMappedPath.header.frame_id = "lidar_init";
 			laserAfterMappedPath.poses.push_back(laserAfterMappedPose);
 			pubLaserAfterMappedPath.publish(laserAfterMappedPath);
 
@@ -860,7 +860,8 @@ void process() {
 			q.setZ(q_w_curr.z());
 			transform.setRotation(q);
 			//   StampedTransform(const tf::Transform &input, const ros::Time &timestamp, const std::string &frame_id, const std::string &child_frame_id)
-			br.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, "camera_init", "/aft_mapped"));
+			// 低频tf
+			br.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, "lidar_init", "aft_mapped"));
 			//----------------------------------------------------------------------------
 
 			frameCount++;
@@ -895,9 +896,9 @@ int main(int argc, char **argv) {
 
 	pubLaserCloudMap = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_map", 100);                  // 每20帧发送全局特征地图
 
-	pubLaserCloudFullRes = nh.advertise<sensor_msgs::PointCloud2>("/velodyne_cloud_registered", 100);    // 当前帧(经过建图优化的，转换到全局坐标系)
+	pubLaserCloudRegisteredCurr = nh.advertise<sensor_msgs::PointCloud2>("/velodyne_cloud_registered_curr", 100);    // 当前帧(经过建图优化的，转换到全局坐标系)
 
-	pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/aft_mapped_to_init", 100);                     // 建图计算后精度较高的当前帧相对于map坐标系的位姿变换
+	pubOdomAftMappedLowFrec = nh.advertise<nav_msgs::Odometry>("/aft_mapped_to_init_low_frec", 100);                     // 低频率发布建图计算后精度较高的当前帧相对于map坐标系的位姿变换
 
 	pubOdomAftMappedHighFrec = nh.advertise<nav_msgs::Odometry>("/aft_mapped_to_init_high_frec", 100);   // 高频率(直接相乘)发布的当前帧curr相对与地图map坐标系的位姿变换
 
@@ -908,7 +909,7 @@ int main(int argc, char **argv) {
 		laserCloudSurfArray[i].reset(new pcl::PointCloud<PointType>());
 	}
 
-	// 开启mapping建图process线程
+	// 开启mapping建图process线程, 同时发布低频位姿变换信息
 	std::thread mapping_process { process };
 
 	ros::spin();
