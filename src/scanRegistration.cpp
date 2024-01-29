@@ -137,7 +137,7 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg) {
     pcl::removeNaNFromPointCloud(laserCloudIn, laserCloudIn, indices);   // 去除nan点
     removeClosedPointCloud(laserCloudIn, laserCloudIn, MINIMUM_RANGE);   // 去除到原点距离小于MINIMUM_RANGE的点
     cloudHeader = laserCloudMsg->header;
-    cloudHeader.stamp = ros::Time::now();
+    // cloudHeader.stamp = ros::Time::now();
 
     int cloudSize = laserCloudIn.points.size();
     float startOri = -atan2(laserCloudIn.points[0].y, laserCloudIn.points[0].x);    // 得到起始和终止点的水平角度

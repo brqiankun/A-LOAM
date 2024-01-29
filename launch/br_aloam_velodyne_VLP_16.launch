@@ -1,6 +1,6 @@
 <launch>
     
-    <param name="scan_line" type="int" value="16" />
+    <param name="scan_line" type="int" value="32" />
 
     <!-- if 1, do mapping 10 Hz, if 2, do mapping 5 Hz. Suggest to use 1, it will adjust frequence automaticlly -->
     <param name="mapping_skip_frame" type="int" value="1" />
@@ -8,7 +8,7 @@
     <arg name="aloam_input_cloud_topic" default="/ground_segmentation_patchworkpp/nonground"/>
 
     <!-- remove too closed points -->
-    <param name="minimum_range" type="double" value="0.3"/>
+    <param name="minimum_range" type="double" value="2"/>
 
 
     <param name="mapping_line_resolution" type="double" value="0.2"/>

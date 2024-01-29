@@ -567,7 +567,7 @@ int main(int argc, char **argv) {
             kdtreeCornerLast->setInputCloud(laserCloudCornerLast);
             kdtreeSurfLast->setInputCloud(laserCloudSurfLast);
 
-            // 每skipFrameNum帧发送LessFlat/LessSharp/FullRes
+            // 每skipFrameNum帧发送LessFlat/LessSharp/FullRes用于laserMapping
             if (frameCount % skipFrameNum == 0) {
                 frameCount = 0;
 

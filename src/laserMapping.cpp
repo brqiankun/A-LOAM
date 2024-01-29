@@ -214,7 +214,7 @@ void laserOdometryHandler(const nav_msgs::Odometry::ConstPtr &laserOdometry) {
 
 	nav_msgs::Odometry odomAftMapped;
 	odomAftMapped.header.frame_id = "lidar_init";
-	odomAftMapped.child_frame_id = "aft_mapped";
+	odomAftMapped.child_frame_id = "lidar";
 	odomAftMapped.header.stamp = laserOdometry->header.stamp;
 	odomAftMapped.pose.pose.orientation.x = q_w_curr.x();
 	odomAftMapped.pose.pose.orientation.y = q_w_curr.y();
@@ -224,6 +224,24 @@ void laserOdometryHandler(const nav_msgs::Odometry::ConstPtr &laserOdometry) {
 	odomAftMapped.pose.pose.position.y = t_w_curr.y();
 	odomAftMapped.pose.pose.position.z = t_w_curr.z();
 	pubOdomAftMappedHighFrec.publish(odomAftMapped);     // 高频率(直接相乘)发布的当前帧curr相对与地图map坐标系的位姿变换
+
+	// 将被处理的当前帧相对map的位姿变换发送到tf
+	static tf::TransformBroadcaster br;
+	tf::Transform transform;
+	tf::Quaternion q;
+	transform.setOrigin(tf::Vector3(t_w_curr(0),
+																	t_w_curr(1),
+																	t_w_curr(2)));
+	q.setW(q_w_curr.w());
+	q.setX(q_w_curr.x());
+	q.setY(q_w_curr.y());
+	q.setZ(q_w_curr.z());
+	transform.setRotation(q);
+	//   StampedTransform(const tf::Transform &input, const ros::Time &timestamp, const std::string &frame_id, const std::string &child_frame_id)
+	// 高频tf
+	br.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, "lidar_init", "lidar"));
+	//----------------------------------------------------------------------------
+
 }
 
 void process() {
@@ -847,22 +865,22 @@ void process() {
 			laserAfterMappedPath.poses.push_back(laserAfterMappedPose);
 			pubLaserAfterMappedPath.publish(laserAfterMappedPath);
 
-			// 将被处理的当前帧相对map的位姿变换发送到tf
-			static tf::TransformBroadcaster br;
-			tf::Transform transform;
-			tf::Quaternion q;
-			transform.setOrigin(tf::Vector3(t_w_curr(0),
-											                t_w_curr(1),
-											                t_w_curr(2)));
-			q.setW(q_w_curr.w());
-			q.setX(q_w_curr.x());
-			q.setY(q_w_curr.y());
-			q.setZ(q_w_curr.z());
-			transform.setRotation(q);
-			//   StampedTransform(const tf::Transform &input, const ros::Time &timestamp, const std::string &frame_id, const std::string &child_frame_id)
-			// 低频tf
-			br.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, "lidar_init", "aft_mapped"));
-			//----------------------------------------------------------------------------
+			// // 将被处理的当前帧相对map的位姿变换发送到tf
+			// static tf::TransformBroadcaster br;
+			// tf::Transform transform;
+			// tf::Quaternion q;
+			// transform.setOrigin(tf::Vector3(t_w_curr(0),
+			// 								                t_w_curr(1),
+			// 								                t_w_curr(2)));
+			// q.setW(q_w_curr.w());
+			// q.setX(q_w_curr.x());
+			// q.setY(q_w_curr.y());
+			// q.setZ(q_w_curr.z());
+			// transform.setRotation(q);
+			// //   StampedTransform(const tf::Transform &input, const ros::Time &timestamp, const std::string &frame_id, const std::string &child_frame_id)
+			// // 低频tf
+			// br.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, "lidar_init", "aft_mapped"));
+			// //----------------------------------------------------------------------------
 
 			frameCount++;
 		}
@@ -896,7 +914,7 @@ int main(int argc, char **argv) {
 
 	pubLaserCloudMap = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_map", 100);                  // 每20帧发送全局特征地图
 
-	pubLaserCloudRegisteredCurr = nh.advertise<sensor_msgs::PointCloud2>("/velodyne_cloud_registered_curr", 100);    // 当前帧(经过建图优化的，转换到全局坐标系)
+	pubLaserCloudRegisteredCurr = nh.advertise<sensor_msgs::PointCloud2>("/velodyne_cloud_registered_curr", 100);    // 当前帧(经过建图优化的，转换到全局坐标系) 低频发布
 
 	pubOdomAftMappedLowFrec = nh.advertise<nav_msgs::Odometry>("/aft_mapped_to_init_low_frec", 100);                     // 低频率发布建图计算后精度较高的当前帧相对于map坐标系的位姿变换
 
